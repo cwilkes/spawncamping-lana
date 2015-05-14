@@ -4,6 +4,7 @@ import sys
 from collections import Counter
 import theano
 from pylearn2.utils import serial
+import scipy.sparse.linalg as linalg
 
 
 def find_cutoffs(ary, percent, min_cutoff=0, trim_zeros=True):
@@ -18,10 +19,15 @@ def find_cutoffs(ary, percent, min_cutoff=0, trim_zeros=True):
         return a2[a2.shape[0]*percent]
 
 
-def scale(ary, percent=0.99):
+def scale_rows(ary):
+    mag = np.sqrt(np.sum(np.power(ary, 2), axis=1))
+    return ary/np.repeat(mag, ary.shape[1]).reshape(ary.shape), mag
+
+
+def scale_cols(ary, percent=0.99):
     cutoffs = find_cutoffs(ary, percent)
     b = 1.*ary / cutoffs
-    return np.clip(b, 0, 1.0), b > 1.0
+    return np.clip(b, 0, 1.0), cutoffs, b > 1.0
 
 
 def get_train_test_mask(data_len, train_percent=0.80):
@@ -33,9 +39,18 @@ def get_train_test_mask(data_len, train_percent=0.80):
     return mask
 
 
+def one_hot_labels(input_fn, output_fn):
+    l1 = np.load(input_fn)
+    c = Counter(l1)
+    l2 = np.zeros((l1.shape[0], len(c)), np.int)
+    # could be faster
+    for row_num, vals in enumerate(l1):
+        l2[row_num,vals]=1
+    np.save(output_fn, l2)
+
 def split_train_test(ary, train_percent=0.80):
     mask = get_train_test_mask(ary.shape[0], train_percent)
-    return ary[mask], ary[~mask]
+    return ary[mask], ary[~mask], mask
 
 
 def autoencode(model_fn, input_fn):
@@ -122,3 +137,25 @@ class DownloadReader(object):
         if use_data_dir:
             fn = os.path.join(os.path.dirname(self.input_file), fn)
         np.save(fn, out_ary)
+
+
+def load_from_train(fn='../otto_data/train.npy'):
+    all_data = np.load(fn)
+    # first column is the run id (not really needed but keeping around)
+    # then the data
+    # last column is the label
+    return all_data[:,0], all_data[:,1:-1], all_data[:,-1]
+
+
+def svds_descending(data, size=6):
+    U, s, Vh = linalg.svds(data,size)
+    n = len(s)
+    U[:,:n] = U[:, n-1::-1]
+    s = s[::-1]
+    Vh[:n, :] = Vh[n-1::-1, :]
+    return U, s, Vh
+
+
+def reconstruct_from_svd(U, s, Vh):
+    S = np.diag(s)
+    return np.dot(U, np.dot(S,Vh))

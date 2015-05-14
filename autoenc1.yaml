@@ -5,16 +5,17 @@
     model: !obj:pylearn2.models.autoencoder.DenoisingAutoencoder {
         nvis : %(nvis)i,
         nhid : %(nhid)i,
+        tied_weights: %(tied_weights)s,
         irange : 0.05,
-        corruptor: !obj:pylearn2.corruption.BinomialCorruptor {
-            corruption_level: 0.2,
+        corruptor: !obj:pylearn2.corruption.GaussianCorruptor {
+            stdev: 0.1,
         },
         act_enc: 'tanh',
-        act_dec: null,    # Linear activation on the decoder side.
+        act_dec: null,
     },
     algorithm: !obj:pylearn2.training_algorithms.sgd.SGD {
-        learning_rate : 1e-3,
-        batch_size : 5,
+        learning_rate : 0.01,
+        batch_size : %(batch_size)i,
         monitoring_dataset : *train,
         cost : !obj:pylearn2.costs.autoencoder.MeanSquaredReconstructionError {},
         termination_criterion : !obj:pylearn2.termination_criteria.EpochCounter {
@@ -22,5 +23,5 @@
         },
     },
     save_path: %(output_fn)s,
-    save_freq: 25
+    save_freq: %(save_freq)i
 }

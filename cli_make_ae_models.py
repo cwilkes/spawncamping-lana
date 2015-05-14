@@ -22,13 +22,22 @@ def run_ae(model_fn, data_fn, output_fn):
 class MakeAEModels():
     def __init__(self, raw_train_fn, top_dir):
         self.dl = util.DownloadReader(raw_train_fn)
-        self.data, self.overs = util.scale(self.dl.data)
+        self.data, self.overs = util.scale(self.dl.data, 0.99)
+        #self.data[self.data > 0] = 1
+        #self.data = np.hstack((self.data, self.overs.astype(self.data.dtype)))
+        #last_col = np.sum(self.overs, axis=1)
+        last_col = np.zeros(self.overs.shape[0])
+        last_col[np.sum(self.overs, axis=1)>0] = True
+        #self.data = np.hstack((self.data, last_col.reshape(last_col.shape[0], -1)))
         self.top_dir = top_dir
-        self.base_hyper_params_aa = dict(nvis=93, batch_size=100, max_epochs=76, nhid=15, save_freq=25)
+        self.base_hyper_params_aa = dict(
+            nvis=self.data.shape[1], batch_size=10, nhid=60, save_freq=10,
+            tied_weights=False)
         self.aa_yaml=open('autoenc1.yaml', 'r').read()
 
     def run_label(self, label):
-        print >>sys.stderr, time.time(), 'Working on label', label
+        start_time = time.time()
+        print >>sys.stderr, start_time, 'Working on label', label
         print 'Working on label', label
         train_fn = os.path.join(self.top_dir, 'train', 'data_%d_train.npy' % (label, ))
         test_fn = os.path.join(self.top_dir, 'test', 'data_%d_test.npy' % (label, ))
@@ -38,19 +47,21 @@ class MakeAEModels():
         _mkdir(test_fn)
         _mkdir(model_fn)
 
-        train, test = util.split_train_test(self.data[self.dl.get_mask_for_label(label)], 0.80)
+        train, test, mask = util.split_train_test(self.data[self.dl.get_mask_for_label(label)], 0.80)
         np.save(train_fn, train)
         np.save(test_fn, test)
 
         hyper_params_aa = self.base_hyper_params_aa.copy()
         hyper_params_aa['input_fn'] = train_fn
         hyper_params_aa['output_fn'] = model_fn
+        #hyper_params_aa['max_epochs'] = train.shape[0]/580000+40
+        hyper_params_aa['max_epochs'] = 300
         config = self.aa_yaml % hyper_params_aa
 
         train = yaml_parse.load(config)
         train.main_loop()
         run_ae(model_fn, test_fn, result_fn)
-        print 'model', model_fn, 'result', result_fn
+        print 'time', time.time() - start_time, 'model', model_fn, 'result', result_fn, 'train', train
 
 
 def main():

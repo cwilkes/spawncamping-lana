@@ -1,0 +1,4 @@
+!obj:pylearn2.datasets.dense_design_matrix.DenseDesignMatrix {
+        X: !pkl: %(input_fn)s,
+        y: !pkl: %(labels_fn)s,
+}
